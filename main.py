@@ -80,7 +80,7 @@ player_speed = 5
 player_direction = "right"
 prev_direction = "right"
 player_walking = False
-player_size = "big"  
+player_size = "small"  
 animation_frame = 0
 frame_delay = 5
 frame_counter = 0
@@ -105,7 +105,7 @@ jump_max_height = 150
 jump_min_height = 0 
 
 key_state = {"right": False, "left": False, "jump": False}
-music_muted = False  
+music_muted = False  # Variable to track the mute state
 
 # Game loop
 running = True
@@ -127,10 +127,10 @@ while running:
                     jump_velocity = 15
             if event.key == pygame.K_m:  # Toggle mute on 'M' key press
                 if music_muted:
-                    pygame.mixer.music.set_volume(0.5)  
+                    pygame.mixer.music.set_volume(0.5)  # Restore volume
                 else:
-                    pygame.mixer.music.set_volume(0.0)  
-                music_muted = not music_muted 
+                    pygame.mixer.music.set_volume(0.0)  # Mute
+                music_muted = not music_muted  # Toggle mute state
             if event.key == pygame.K_q:  
                 running = False
         elif event.type == pygame.KEYUP:
@@ -143,13 +143,10 @@ while running:
 
 
  
-if player_size == "small":
-    player.size = small_hitbox
-    player.y += (big_hitbox[1] - small_hitbox[1])  # Adjust position for smaller hitbox
-else:
-    player.size = big_hitbox
-    player.y -= (big_hitbox[1] - small_hitbox[1])  # Adjust position for larger hitbox
-
+    if player_size == "small":
+        player.size = small_hitbox
+    else:
+        player.size = big_hitbox
 
     if key_state["right"]:  
         if player_direction == "left" and player_walking:
