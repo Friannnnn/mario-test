@@ -105,7 +105,7 @@ jump_max_height = 150
 jump_min_height = 0 
 
 key_state = {"right": False, "left": False, "jump": False}
-music_muted = False  # Variable to track the mute state
+music_muted = False  
 
 # Game loop
 running = True
@@ -127,10 +127,10 @@ while running:
                     jump_velocity = 15
             if event.key == pygame.K_m:  # Toggle mute on 'M' key press
                 if music_muted:
-                    pygame.mixer.music.set_volume(0.5)  # Restore volume
+                    pygame.mixer.music.set_volume(0.5)  
                 else:
-                    pygame.mixer.music.set_volume(0.0)  # Mute
-                music_muted = not music_muted  # Toggle mute state
+                    pygame.mixer.music.set_volume(0.0)  
+                music_muted = not music_muted 
             if event.key == pygame.K_q:  
                 running = False
         elif event.type == pygame.KEYUP:
