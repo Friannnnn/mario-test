@@ -1,24 +1,27 @@
 import pygame
+import pytmx
 
 pygame.init()
 
 pygame.mixer.init()
 
-pygame.mixer.music.load("assets/sounds/overworld.mp3")  
-pygame.mixer.music.set_volume(0.5)  
-pygame.mixer.music.play(loops=-1, start=0.0)  
+pygame.mixer.music.load("assets/sounds/overworld.mp3")
+pygame.mixer.music.set_volume(0.5)
+pygame.mixer.music.play(loops=-1, start=0.0)
 
-WIDTH, HEIGHT = 1080, 600
+WIDTH, HEIGHT = 800, 600
 screen = pygame.display.set_mode((WIDTH, HEIGHT))
 clock = pygame.time.Clock()
-background = pygame.image.load("assets/mario-moves/level_background.png")
-bg_width, bg_height = background.get_size()
+tmx_data = pytmx.load_pygame("level/level1-1.tmx")  # Adjust path to your .tmx file
 
-scaled_bg_height = HEIGHT
-scaled_bg_width = 8000  
+# Tile size from the Tiled map (usually 32x32 or 64x64)
+TILE_SIZE = tmx_data.tilewidth
 
-background_scaled = pygame.transform.scale(background, (scaled_bg_width, scaled_bg_height))
+# Scale factor for tiles
+scale_factor = 2  # Increase scale to make tiles larger
+scaled_tile_size = TILE_SIZE * scale_factor  # Define scaled tile size
 
+# Player settings
 mario_sprites = {
     "small": {
         "idle_right": pygame.image.load("assets/mario-moves/small_idle_right.png"),
@@ -58,60 +61,95 @@ mario_sprites = {
     }
 }
 
-scaling_factor = 2 
+# Scaled player settings
 for size in mario_sprites:
     for direction in mario_sprites[size]:
-        if isinstance(mario_sprites[size][direction], list): 
+        if isinstance(mario_sprites[size][direction], list):
             mario_sprites[size][direction] = [
-                pygame.transform.scale(sprite, (sprite.get_width() * scaling_factor, sprite.get_height() * scaling_factor))
+                pygame.transform.scale(sprite, (sprite.get_width() * scale_factor, sprite.get_height() * scale_factor))
                 for sprite in mario_sprites[size][direction]
             ]
         else:
             mario_sprites[size][direction] = pygame.transform.scale(
-                mario_sprites[size][direction], 
-                (mario_sprites[size][direction].get_width() * scaling_factor, 
-                 mario_sprites[size][direction].get_height() * scaling_factor)
+                mario_sprites[size][direction],
+                (mario_sprites[size][direction].get_width() * scale_factor,
+                 mario_sprites[size][direction].get_height() * scale_factor)
             )
 
-player = pygame.Rect(100, 495, 100, 100) 
-small_hitbox = (100, 100) 
-big_hitbox = (100, 200) 
-player_speed = 5
+# Player setup
+player = pygame.Rect(100, 495, 100, 100)
+player_speed = 3
 player_direction = "right"
-prev_direction = "right"
 player_walking = False
-player_size = "small"  
-animation_frame = 0
-frame_delay = 5
-frame_counter = 0
-
+player_size = "small"
 camera_x = 0
-
-MIDDLE_X = 550  # middle 
-
-velocity = 0
-deceleration = 0.6  
-turn_delay = 0  
-max_turn_delay = 10  
-acceleration = 0.2 
-max_speed = 4 
-
-slide_factor = 0.3 
-
-jumping = False
-jump_velocity = 0
-jump_acceleration = -1.25  
-jump_max_height = 150
-jump_min_height = 0 
-
+MIDDLE_X = 400  # middle
 key_state = {"right": False, "left": False, "jump": False}
-music_muted = False  # Variable to track the mute state
+jumping = False  
+jump_velocity = 0
+gravity = 1
+jump_height = 15
+
+def draw_map():
+    for layer in tmx_data.visible_layers:
+        if isinstance(layer, pytmx.TiledTileLayer): 
+            for x, y, gid in layer: 
+                if gid:  
+                    tile_image = tmx_data.get_tile_image_by_gid(gid)  
+                    if tile_image:
+                       
+                        screen_x = (x * scaled_tile_size) - camera_x
+                        screen_y = y * scaled_tile_size
+
+                        # Use integer positions for perfect pixel alignment
+                        screen.blit(tile_image, (int(screen_x), int(screen_y)))
+
+def find_ground_start(player_rect):
+    """Find the y-coordinate for Mario to stand on the ground."""
+    tile_x = player_rect.centerx // scaled_tile_size  
+
+    for y in range(player_rect.bottom // scaled_tile_size, tmx_data.height):
+        tile_y = y
+        tile = tmx_data.layerat(0).tile_at(tile_x, tile_y)  
+        if tile and tile.gid == 19:  # Check if the tile's GID is 19 (ground)
+            return tile_y * scaled_tile_size - player_rect.height  # Adjust Mario's Y position to the ground
+    return player_rect.bottom  # If no ground found, return the default position
+
+# Function to check if Mario is standing on the ground based on the Tiled map
+def check_ground_collision(player_rect):
+    """Check if Mario is standing on the ground."""
+    player_bottom = player_rect.bottom
+    tile_x = player_rect.centerx // scaled_tile_size
+    tile_y = player_bottom // scaled_tile_size
+    tile = tmx_data.layerat(0).tile_at(tile_x, tile_y)  # Get the tile at this position
+    if tile and tile.gid == 19:  # Check if the tile's GID is 19 (ground)
+        return True
+    return False
+
+# Function to update the camera position to follow Mario
+def update_camera():
+    """Update the camera position to follow Mario."""
+    global camera_x
+
+    if player.x > MIDDLE_X:
+        camera_x += player_speed
+
+    # Ensure the camera position remains within integer bounds
+    camera_x = max(0, camera_x)
+    camera_x = min(camera_x, tmx_data.width * scaled_tile_size - WIDTH)
 
 # Game loop
 running = True
+player.y = find_ground_start(player)  # Set initial position of Mario
+
 while running:
-    screen.fill((255, 255, 255))
-    screen.blit(background_scaled, (-camera_x, 0))
+    screen.fill((255, 255, 255))  # Clear screen
+    
+    # Draw the Tiled map
+    draw_map()
+
+    # Update camera position
+    update_camera()
 
     for event in pygame.event.get():
         if event.type == pygame.QUIT:
@@ -121,10 +159,9 @@ while running:
                 key_state["right"] = True
             if event.key == pygame.K_a:  
                 key_state["left"] = True
-            if event.key == pygame.K_SPACE: 
-                if not jumping:  
-                    jumping = True
-                    jump_velocity = 15
+            if event.key == pygame.K_SPACE and not jumping: 
+                jumping = True
+                jump_velocity = -jump_height  # Set initial jump velocity
             if event.key == pygame.K_m:  # Toggle mute on 'M' key press
                 if music_muted:
                     pygame.mixer.music.set_volume(0.5)  # Restore volume
@@ -138,106 +175,36 @@ while running:
                 key_state["right"] = False
             if event.key == pygame.K_a: 
                 key_state["left"] = False
-            if event.key == pygame.K_SPACE: 
-                key_state["jump"] = False
 
-
- 
-    if player_size == "small":
-        player.size = small_hitbox
-    else:
-        player.size = big_hitbox
-
-    if key_state["right"]:  
-        if player_direction == "left" and player_walking:
-            if turn_delay == 0:
-                turn_delay = max_turn_delay
-            player_direction = "right"
-            player_walking = False
-        else:
-            if velocity < max_speed:
-                velocity += acceleration
-            player_walking = True
-    elif key_state["left"]:  # Move left
-        if player_direction == "right" and player_walking:
-            if turn_delay == 0:
-                turn_delay = max_turn_delay
-            player_direction = "left"
-            player_walking = False
-        else:
-            if velocity > -max_speed:
-                velocity -= acceleration
-            player_walking = True
-    else:
-        player_walking = False
-
-    
-    if not player_walking:
-        if velocity > 0:
-            velocity -= deceleration
-            if velocity < 0:
-                velocity = 0
-        elif velocity < 0:
-            velocity += deceleration
-            if velocity > 0:
-                velocity = 0
-
-     
-        if velocity == 0:
-            velocity -= slide_factor if player_direction == "right" else -slide_factor
-            if abs(velocity) < slide_factor:
-                velocity = 0
-
-   
+    # Handle jumping
     if jumping:
-        player.y -= jump_velocity  
-        jump_velocity += jump_acceleration 
-        if player.y >= 495: 
-            player.y = 495
+        player.y += jump_velocity
+        jump_velocity += gravity  # Apply gravity
+
+        # Check if Mario hits the ground
+        if check_ground_collision(player):
             jumping = False
-            jump_velocity = 0 
+            player.y = find_ground_start(player)  # Reset to ground position
+            jump_velocity = 0  # Reset jump velocity
 
-    player.x += velocity
-
-    if player.x < 0:
-        player.x = 0
-
-    if player.x > MIDDLE_X:
-        player.x = MIDDLE_X
-
-    if player.x == MIDDLE_X and player_walking and player_direction == "right":
-        if camera_x + WIDTH < scaled_bg_width:  
-            camera_x += player_speed
-
-    if camera_x + WIDTH > scaled_bg_width:
-        camera_x = scaled_bg_width - WIDTH
-
+    # Determine current sprite based on movement and jumping
     if player_walking:
-        if turn_delay > 0:
-            if player_direction == "left":
-                current_sprite = mario_sprites[player_size]["turn_right_to_left"]
-            else:
-                current_sprite = mario_sprites[player_size]["turn_left_to_right"]
-            turn_delay -= 1
+        if player_direction == "left":
+            current_sprite = mario_sprites[player_size]["turn_right_to_left"]
         else:
-            
-            frame_counter += 1
-            if frame_counter >= frame_delay:
-                frame_counter = 0
-                animation_frame = (animation_frame + 1) % len(mario_sprites[player_size][f"walk_{player_direction}"])
-            current_sprite = mario_sprites[player_size][f"walk_{player_direction}"][animation_frame]
-    else:
-        current_sprite = mario_sprites[player_size][f"idle_{player_direction}"]
-
-    if jumping:
+            current_sprite = mario_sprites[player_size]["turn_left_to_right"]
+    elif jumping:
         if player_direction == "right":
             current_sprite = mario_sprites[player_size]["jump_right"]
         else:
             current_sprite = mario_sprites[player_size]["jump_left"]
+    else:
+        current_sprite = mario_sprites[player_size][f"idle_{player_direction}"]
 
-    screen.blit(current_sprite, (player.x, player.y))
+    # Blit Mario on the screen with the updated coordinates
+    screen.blit(current_sprite, (int(player.x - camera_x), int(player.y)))
 
-    pygame.display.flip()
-    clock.tick(30) 
+    pygame.display.flip()  # Update the screen
+    clock.tick(60)  # Maintain 60 frames per second
 
 pygame.quit()
